@@ -85,7 +85,3 @@ Build Rows applies the mapping, sorts by cluster value, and emits one flat row p
 - The model does not see live SERPs, so it infers intent from the query alone. A keyword whose SERP has shifted commercially may still be classified informational.
 - Clustering quality degrades on very large lists, since pass two only sees labels rather than every keyword.
 - Telegram caps uploads at 20MB for bots, which is far above any realistic keyword CSV, but worth knowing.
-
-## License
-
-Add your preferred license here.
