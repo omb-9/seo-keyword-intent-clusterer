@@ -1,0 +1,809 @@
+{
+  "name": "SEO Keyword Intent Clusterer (Telegram + OpenRouter)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## SEO Keyword Intent Clusterer\n**CSV in, content-plan-ready spreadsheet out.**\n\n1. Attach your Telegram credential to every Telegram node.\n2. Create an **HTTP Header Auth** credential named `OpenRouter API Key` (header `Authorization`, value `Bearer sk-or-...`) and attach it to both OpenRouter nodes.\n3. Tune `batchSize` and `maxKeywords` in the **Config** node.\n4. Activate, then send the bot `/help`.",
+        "height": 340,
+        "width": 470,
+        "color": 4
+      },
+      "id": "s1",
+      "name": "Note s1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Two-pass clustering\n\nPass one classifies keywords in batches, which is fast but lets each batch invent its own cluster names.\n\nPass two takes only the distinct labels and merges near duplicates into a canonical set with a pillar page title each.\n\nIf pass two fails, the raw labels survive and the workflow still delivers.",
+        "height": 320,
+        "width": 440,
+        "color": 7
+      },
+      "id": "s2",
+      "name": "Note s2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        340,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Failure behaviour\n\nBatches are matched back to keywords **by keyword string, not item index**, so a failed batch cannot shift every downstream row.\n\nFailed keywords come through marked `unclassified`, the user is told how many batches dropped, and the spreadsheet is still delivered.",
+        "height": 320,
+        "width": 440,
+        "color": 3
+      },
+      "id": "s3",
+      "name": "Note s3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": false
+        }
+      },
+      "id": "trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -600,
+        340
+      ],
+      "webhookId": "b2c3d4e5-0000-4000-8000-000000000002",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "model",
+              "value": "anthropic/claude-sonnet-4.5",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "fallbackModel",
+              "value": "openai/gpt-4.1-mini",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "temperature",
+              "value": 0.1,
+              "type": "number"
+            },
+            {
+              "id": "c4",
+              "name": "batchSize",
+              "value": 40,
+              "type": "number"
+            },
+            {
+              "id": "c5",
+              "name": "maxKeywords",
+              "value": 1000,
+              "type": "number"
+            },
+            {
+              "id": "c6",
+              "name": "appName",
+              "value": "n8n SEO Keyword Intent Clusterer",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -380,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1a",
+                    "leftValue": "={{ $json.message.text || '' }}",
+                    "rightValue": "/help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  },
+                  {
+                    "id": "r1b",
+                    "leftValue": "={{ $json.message.text || '' }}",
+                    "rightValue": "/start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "help"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r2a",
+                    "leftValue": "={{ $json.message.document ? $json.message.document.file_id : '' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "file"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "other"
+        }
+      },
+      "id": "router",
+      "name": "Route Input",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -160,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "<b>SEO Keyword Intent Clusterer</b>\n\nUpload a CSV or TXT of raw keywords and you get back a spreadsheet that is ready for content planning: search intent, funnel stage, topic cluster, recommended page format and priority for every keyword.\n\n<b>File format</b>\nOne keyword per row. A header row is detected automatically, and a column named <code>keyword</code>, <code>query</code> or <code>term</code> will be used if present. Comma, semicolon, tab and pipe delimiters all work.\n\n<b>Optional columns</b>\nAny <code>volume</code>, <code>difficulty</code> or <code>cpc</code> column is carried straight through into the output, so your existing metrics sit next to the intent data.\n\n<b>Output</b>\nAn .xlsx grouped by cluster with the highest value clusters first, plus a short summary message with the intent mix and where to start.\n\nJust send the file to begin.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "help",
+      "name": "Send Help",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "Send me a <b>CSV or TXT file</b> of keywords, one per row, and I will classify and cluster them.\n\nSend <code>/help</code> for the full format guide.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "unsupported",
+      "name": "Send Unsupported",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        580
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.document.file_id }}",
+        "download": true
+      },
+      "id": "download",
+      "name": "Download Keyword File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        340
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---------------------------------------------------------------------------\n// Reads the uploaded CSV/TXT, sniffs the delimiter, finds the keyword column,\n// carries through any volume/difficulty/CPC columns, dedupes, and splits the\n// list into batches sized for a single OpenRouter call.\n// ---------------------------------------------------------------------------\n\nconst cfg = $('Config').first().json;\nconst trigger = $('Telegram Trigger').first().json;\nconst doc = (trigger.message && trigger.message.document) || {};\n\nlet text = '';\ntry {\n  const buf = await this.helpers.getBinaryDataBuffer(0, 'data');\n  text = buf.toString('utf8');\n} catch (err) {\n  return [{ json: { ok: false, reason: 'The file could not be read from Telegram.', chatId: trigger.message.chat.id } }];\n}\nif (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);\n\nfunction sniffDelimiter(sample) {\n  const candidates = [',', ';', '\\t', '|'];\n  const lines = sample.split('\\n').slice(0, 6).filter((l) => l.trim() !== '');\n  let best = ',';\n  let bestScore = -1;\n  for (const d of candidates) {\n    const counts = lines.map((l) => l.split(d).length);\n    if (!counts.length) continue;\n    const avg = counts.reduce((a, b) => a + b, 0) / counts.length;\n    const consistent = counts.every((c) => c === counts[0]);\n    const score = (avg > 1 ? avg : 0) + (consistent ? 0.5 : 0);\n    if (score > bestScore) { bestScore = score; best = d; }\n  }\n  return best;\n}\n\n// RFC4180 style parser: handles quoted fields, escaped quotes and embedded newlines.\nfunction parseCsv(input, delim) {\n  const rows = [];\n  let row = [];\n  let field = '';\n  let inQuotes = false;\n  for (let i = 0; i < input.length; i++) {\n    const ch = input[i];\n    if (inQuotes) {\n      if (ch === '\"') {\n        if (input[i + 1] === '\"') { field += '\"'; i++; } else { inQuotes = false; }\n      } else { field += ch; }\n    } else if (ch === '\"') {\n      inQuotes = true;\n    } else if (ch === delim) {\n      row.push(field); field = '';\n    } else if (ch === '\\n') {\n      row.push(field); rows.push(row); row = []; field = '';\n    } else if (ch !== '\\r') {\n      field += ch;\n    }\n  }\n  if (field.length || row.length) { row.push(field); rows.push(row); }\n  return rows.filter((r) => r.some((c) => String(c).trim() !== ''));\n}\n\nconst delimiter = sniffDelimiter(text);\nconst rows = parseCsv(text, delimiter);\n\nif (!rows.length) {\n  return [{ json: { ok: false, reason: 'The file appears to be empty.', chatId: trigger.message.chat.id } }];\n}\n\nconst KEYWORD_HEADERS = ['keyword', 'keywords', 'query', 'queries', 'term', 'terms', 'search term', 'search query', 'kw', 'phrase'];\nconst VOLUME_RE = /volume|searches|msv|^vol$/i;\nconst DIFFICULTY_RE = /difficult|^kd$|competition|^comp$/i;\nconst CPC_RE = /cpc|cost.?per.?click/i;\n\nconst first = rows[0].map((c) => String(c).trim());\nconst lowerFirst = first.map((c) => c.toLowerCase());\nconst hasHeader = lowerFirst.some((c) =>\n  KEYWORD_HEADERS.includes(c) || VOLUME_RE.test(c) || DIFFICULTY_RE.test(c) || CPC_RE.test(c));\n\nlet keywordCol = 0;\nlet volumeCol = -1;\nlet difficultyCol = -1;\nlet cpcCol = -1;\n\nif (hasHeader) {\n  const kwIdx = lowerFirst.findIndex((c) => KEYWORD_HEADERS.includes(c));\n  keywordCol = kwIdx === -1 ? 0 : kwIdx;\n  volumeCol = lowerFirst.findIndex((c) => VOLUME_RE.test(c));\n  difficultyCol = lowerFirst.findIndex((c) => DIFFICULTY_RE.test(c));\n  cpcCol = lowerFirst.findIndex((c) => CPC_RE.test(c));\n}\n\nconst dataRows = hasHeader ? rows.slice(1) : rows;\n\nconst seen = new Set();\nconst keywords = [];\nconst extras = {};\nlet skipped = 0;\n\nfor (const r of dataRows) {\n  const kw = String(r[keywordCol] === undefined ? '' : r[keywordCol]).trim().replace(/\\s+/g, ' ');\n  if (!kw || kw.length > 120 || /^[\\d.,%$-]+$/.test(kw)) { skipped++; continue; }\n  const key = kw.toLowerCase();\n  if (seen.has(key)) { skipped++; continue; }\n  seen.add(key);\n  keywords.push(kw);\n  const extra = {};\n  if (volumeCol > -1 && r[volumeCol] !== undefined) extra.volume = String(r[volumeCol]).trim();\n  if (difficultyCol > -1 && r[difficultyCol] !== undefined) extra.difficulty = String(r[difficultyCol]).trim();\n  if (cpcCol > -1 && r[cpcCol] !== undefined) extra.cpc = String(r[cpcCol]).trim();\n  if (Object.keys(extra).length) extras[key] = extra;\n}\n\nconst maxKeywords = Number(cfg.maxKeywords) || 1000;\nlet capped = false;\nlet finalKeywords = keywords;\nif (finalKeywords.length > maxKeywords) {\n  finalKeywords = finalKeywords.slice(0, maxKeywords);\n  capped = true;\n}\n\nif (!finalKeywords.length) {\n  return [{ json: {\n    ok: false,\n    reason: 'No usable keywords were found. Check that the file has a keyword column with text values.',\n    chatId: trigger.message.chat.id,\n  } }];\n}\n\nconst batchSize = Number(cfg.batchSize) || 40;\nconst batches = [];\nfor (let i = 0; i < finalKeywords.length; i += batchSize) {\n  batches.push(finalKeywords.slice(i, i + batchSize));\n}\n\nconst resultSchema = {\n  type: 'object',\n  additionalProperties: false,\n  required: ['results'],\n  properties: {\n    results: {\n      type: 'array',\n      items: {\n        type: 'object',\n        additionalProperties: false,\n        required: ['keyword', 'intent', 'funnel_stage', 'cluster_label', 'content_format', 'priority', 'is_branded', 'is_local', 'notes'],\n        properties: {\n          keyword: { type: 'string', description: 'Echo the keyword back exactly as supplied.' },\n          intent: { type: 'string', enum: ['informational', 'navigational', 'commercial', 'transactional'] },\n          funnel_stage: { type: 'string', enum: ['awareness', 'consideration', 'decision'] },\n          cluster_label: { type: 'string', description: 'Two to four word topic label shared by every keyword on the same subject.' },\n          content_format: { type: 'string', enum: ['blog post', 'how-to guide', 'tutorial', 'listicle', 'comparison page', 'review page', 'product page', 'category page', 'landing page', 'pricing page', 'FAQ', 'glossary', 'case study', 'location page', 'tool or calculator'] },\n          priority: { type: 'string', enum: ['high', 'medium', 'low'] },\n          is_branded: { type: 'boolean' },\n          is_local: { type: 'boolean' },\n          notes: { type: 'string', description: 'Under twelve words, or an empty string.' },\n        },\n      },\n    },\n  },\n};\n\nconst systemPrompt = [\n  'You are a senior SEO strategist classifying search intent for content planning.',\n  '',\n  'For every keyword supplied, return one result object. Return exactly as many results as keywords, in the same order, echoing each keyword back verbatim. Emit no prose outside the JSON.',\n  '',\n  'Intent definitions:',\n  '- informational: the searcher wants to understand something. No purchase decision is being made yet.',\n  '- navigational: the searcher is looking for a specific site, brand, product name or login page.',\n  '- commercial: the searcher is comparing, evaluating or researching before buying. Includes best, vs, review, alternative and top style queries.',\n  '- transactional: the searcher is ready to act. Includes buy, price, quote, near me, hire, book and free trial style queries.',\n  '',\n  'Rules:',\n  '1. cluster_label groups keywords that would be served by the same page or the same tight topic. Reuse the exact same label string across every keyword in that group. Do not invent a separate label for a near duplicate phrasing.',\n  '2. Keep cluster labels short, lowercase and descriptive of the topic, not the intent. Good: \"wordpress hosting cost\". Bad: \"transactional hosting queries\".',\n  '3. content_format must be the format that would realistically rank for that query, not the format you would prefer to write.',\n  '4. priority reflects commercial value and specificity together. A vague head term with no clear intent is not high priority just because it is popular.',\n  '5. is_local is true only when the query implies a geographic service area, including \"near me\" and city or region modifiers.',\n  '6. is_branded is true when a specific company, product or trademark name appears.',\n  '7. notes is optional context a content planner would act on, such as a SERP feature opportunity or an ambiguity. Leave it empty rather than padding it.',\n].join('\\n');\n\nreturn batches.map((batch, i) => ({\n  json: {\n    ok: true,\n    chatId: trigger.message.chat.id,\n    fileName: doc.file_name || 'keywords.csv',\n    batchIndex: i,\n    batchCount: batches.length,\n    totalKeywords: finalKeywords.length,\n    skipped: skipped,\n    capped: capped,\n    delimiter: delimiter === '\\t' ? 'tab' : delimiter,\n    hasHeader: hasHeader,\n    keywords: batch,\n    extras: i === 0 ? extras : {},\n    payload: {\n      model: cfg.model,\n      models: [cfg.model, cfg.fallbackModel],\n      temperature: Number(cfg.temperature),\n      max_tokens: 8000,\n      response_format: { type: 'json_schema', json_schema: { name: 'keyword_intent', strict: true, schema: resultSchema } },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: 'Classify these ' + batch.length + ' keywords:\\n\\n' + batch.map((k, n) => (n + 1) + '. ' + k).join('\\n') },\n      ],\n    },\n  },\n}));\n"
+      },
+      "id": "parse",
+      "name": "Parse Keyword File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hasKw",
+      "name": "Has Keywords?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        540,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=⚠️ I could not read that file.\n\n<b>Reason:</b> <code>{{ $json.reason }}</code>\n\nSend <code>/help</code> to see the expected format.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "parseErr",
+      "name": "Send Parse Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        600
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=⚙️ Parsed <b>{{ $json.totalKeywords }}</b> keywords from <code>{{ $json.fileName }}</code>.\nClassifying in {{ $json.batchCount }} batch(es), then consolidating clusters. This usually takes under a minute.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "progress",
+      "name": "Send Progress",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      },
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://n8n.io"
+            },
+            {
+              "name": "X-Title",
+              "value": "={{ $('Config').first().json.appName }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        }
+      },
+      "id": "classify",
+      "name": "Classify Intent (Pass 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 4000,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "=⚠️ At least one batch failed during classification.\n\n<b>Reason:</b> <code>{{ $json.error ? ($json.error.message || $json.error) : 'Unknown error from OpenRouter' }}</code>\n\nAny batches that did succeed will still be delivered, with the failed keywords marked as unclassified. This is usually a rate limit or a model timeout, so a retry with a smaller <code>batchSize</code> in the Config node normally clears it.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "failure",
+      "name": "Send Batch Failure",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1020,
+        580
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---------------------------------------------------------------------------\n// Merges every batch response back onto the original keyword list by matching\n// on the keyword string rather than item index, so a failed or partial batch\n// degrades into \"unclassified\" rows instead of corrupting the alignment.\n// Then builds the second pass payload that consolidates cluster labels.\n// ---------------------------------------------------------------------------\n\nconst cfg = $('Config').first().json;\nconst batchItems = $('Parse Keyword File').all().map((i) => i.json);\nconst meta = batchItems[0] || {};\nconst extras = meta.extras || {};\n\nconst allKeywords = [];\nfor (const b of batchItems) for (const k of (b.keywords || [])) allKeywords.push(k);\n\nfunction messageText(r) {\n  const choice = r && r.choices && r.choices[0];\n  const content = choice && choice.message ? choice.message.content : '';\n  if (typeof content === 'string') return content;\n  if (Array.isArray(content)) return content.map((p) => p.text || '').join('');\n  return '';\n}\n\nfunction safeParse(str) {\n  let raw = String(str || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n  try { return JSON.parse(raw); } catch (e) { /* fall through */ }\n  const s = raw.indexOf('{');\n  const t = raw.lastIndexOf('}');\n  if (s !== -1 && t > s) { try { return JSON.parse(raw.slice(s, t + 1)); } catch (e) { return null; } }\n  return null;\n}\n\nconst byKeyword = new Map();\nlet usage = 0;\nlet modelUsed = cfg.model;\n\nfor (const item of $input.all()) {\n  const res = item.json || {};\n  if (res.usage && res.usage.total_tokens) usage += res.usage.total_tokens;\n  if (res.model) modelUsed = res.model;\n  const parsed = safeParse(messageText(res));\n  const results = parsed && Array.isArray(parsed.results) ? parsed.results : [];\n  for (const r of results) {\n    if (!r || !r.keyword) continue;\n    byKeyword.set(String(r.keyword).trim().toLowerCase(), r);\n  }\n}\n\nconst classified = allKeywords.map((kw) => {\n  const hit = byKeyword.get(kw.toLowerCase());\n  const extra = extras[kw.toLowerCase()] || {};\n  return {\n    keyword: kw,\n    intent: hit ? hit.intent : 'unclassified',\n    funnel_stage: hit ? hit.funnel_stage : '',\n    cluster_label: hit ? String(hit.cluster_label || '').trim().toLowerCase() : 'unclassified',\n    content_format: hit ? hit.content_format : '',\n    priority: hit ? hit.priority : '',\n    is_branded: hit ? !!hit.is_branded : false,\n    is_local: hit ? !!hit.is_local : false,\n    notes: hit ? (hit.notes || '') : 'Not returned by the model',\n    volume: extra.volume || '',\n    difficulty: extra.difficulty || '',\n    cpc: extra.cpc || '',\n  };\n});\n\n// Collect the raw labels with a couple of example keywords each, so pass two\n// can merge near duplicates like \"seo pricing\" and \"seo cost\" into one cluster.\nconst labelExamples = {};\nfor (const c of classified) {\n  if (!c.cluster_label || c.cluster_label === 'unclassified') continue;\n  if (!labelExamples[c.cluster_label]) labelExamples[c.cluster_label] = [];\n  if (labelExamples[c.cluster_label].length < 3) labelExamples[c.cluster_label].push(c.keyword);\n}\nconst rawLabels = Object.keys(labelExamples);\n\nconst clusterSchema = {\n  type: 'object',\n  additionalProperties: false,\n  required: ['clusters'],\n  properties: {\n    clusters: {\n      type: 'array',\n      items: {\n        type: 'object',\n        additionalProperties: false,\n        required: ['canonical_label', 'merged_from', 'pillar_page_title'],\n        properties: {\n          canonical_label: { type: 'string', description: 'Short lowercase label for the merged cluster.' },\n          merged_from: { type: 'array', items: { type: 'string' }, description: 'Every raw label that maps to this cluster, copied verbatim.' },\n          pillar_page_title: { type: 'string', description: 'A publishable title for the page or hub that would own this cluster.' },\n        },\n      },\n    },\n  },\n};\n\nconst payload = {\n  model: cfg.model,\n  models: [cfg.model, cfg.fallbackModel],\n  temperature: Number(cfg.temperature),\n  max_tokens: 4000,\n  response_format: { type: 'json_schema', json_schema: { name: 'cluster_consolidation', strict: true, schema: clusterSchema } },\n  messages: [\n    {\n      role: 'system',\n      content: [\n        'You are consolidating topic cluster labels produced independently across several batches, so near duplicates need merging.',\n        '',\n        'Rules:',\n        '1. Every raw label supplied must appear in exactly one merged_from array. Copy labels verbatim, including spacing.',\n        '2. Merge two labels only when a single page could realistically serve both. Do not merge distinct intents or distinct products just because the wording is similar.',\n        '3. A label with no good match stays on its own with merged_from containing only itself.',\n        '4. canonical_label should be the clearest of the merged labels, or a better short label if none of them is clear.',\n        '5. pillar_page_title should read like a real page title, not a keyword string.',\n      ].join('\\n'),\n    },\n    {\n      role: 'user',\n      content: 'Consolidate these ' + rawLabels.length + ' cluster labels.\\n\\n' +\n        rawLabels.map((l) => '- ' + l + '  (examples: ' + labelExamples[l].join('; ') + ')').join('\\n'),\n    },\n  ],\n};\n\nreturn [{ json: {\n  chatId: meta.chatId,\n  fileName: meta.fileName,\n  totalKeywords: classified.length,\n  skipped: meta.skipped || 0,\n  capped: !!meta.capped,\n  batchCount: meta.batchCount || 1,\n  batchesReturned: $input.all().length,\n  tokensUsed: usage,\n  modelUsed: modelUsed,\n  rawLabelCount: rawLabels.length,\n  classified: classified,\n  payload: payload,\n} }];\n"
+      },
+      "id": "collect",
+      "name": "Collect Classifications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://n8n.io"
+            },
+            {
+              "name": "X-Title",
+              "value": "={{ $('Config').first().json.appName }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        }
+      },
+      "id": "consolidate",
+      "name": "Consolidate Clusters (Pass 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 4000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---------------------------------------------------------------------------\n// Applies the canonical cluster mapping from pass two, then emits one clean\n// spreadsheet row per keyword. If pass two failed, the raw labels are kept.\n// ---------------------------------------------------------------------------\n\nconst collected = $('Collect Classifications').first().json;\nconst res = $json || {};\n\nfunction messageText(r) {\n  const choice = r && r.choices && r.choices[0];\n  const content = choice && choice.message ? choice.message.content : '';\n  if (typeof content === 'string') return content;\n  if (Array.isArray(content)) return content.map((p) => p.text || '').join('');\n  return '';\n}\n\nlet mapping = {};\nlet pillars = {};\nlet consolidated = false;\n\ntry {\n  let raw = messageText(res).trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n  let parsed = null;\n  try { parsed = JSON.parse(raw); } catch (e) {\n    const s = raw.indexOf('{'); const t = raw.lastIndexOf('}');\n    if (s !== -1 && t > s) parsed = JSON.parse(raw.slice(s, t + 1));\n  }\n  if (parsed && Array.isArray(parsed.clusters)) {\n    for (const c of parsed.clusters) {\n      const canon = String(c.canonical_label || '').trim().toLowerCase();\n      if (!canon) continue;\n      for (const from of (c.merged_from || [])) {\n        mapping[String(from).trim().toLowerCase()] = canon;\n      }\n      pillars[canon] = c.pillar_page_title || '';\n    }\n    consolidated = Object.keys(mapping).length > 0;\n  }\n} catch (e) {\n  consolidated = false;\n}\n\nconst INTENT_ORDER = { transactional: 0, commercial: 1, informational: 2, navigational: 3, unclassified: 4 };\nconst PRIORITY_ORDER = { high: 0, medium: 1, low: 2, '': 3 };\n\nconst rows = collected.classified.map((c) => {\n  const cluster = mapping[c.cluster_label] || c.cluster_label;\n  return {\n    Keyword: c.keyword,\n    Cluster: cluster,\n    'Pillar Page': pillars[cluster] || '',\n    Intent: c.intent,\n    'Funnel Stage': c.funnel_stage,\n    'Content Format': c.content_format,\n    Priority: c.priority,\n    Branded: c.is_branded ? 'yes' : 'no',\n    Local: c.is_local ? 'yes' : 'no',\n    'Search Volume': c.volume,\n    Difficulty: c.difficulty,\n    CPC: c.cpc,\n    Notes: c.notes,\n  };\n});\n\n// Group the sheet by cluster, with the highest value clusters first, so the\n// file is readable top to bottom without any sorting in Excel.\nconst clusterScore = {};\nfor (const r of rows) {\n  const s = clusterScore[r.Cluster] || { size: 0, best: 9 };\n  s.size += 1;\n  s.best = Math.min(s.best, PRIORITY_ORDER[r.Priority] === undefined ? 3 : PRIORITY_ORDER[r.Priority]);\n  clusterScore[r.Cluster] = s;\n}\n\nrows.sort((a, b) => {\n  const sa = clusterScore[a.Cluster];\n  const sb = clusterScore[b.Cluster];\n  if (sa.best !== sb.best) return sa.best - sb.best;\n  if (sa.size !== sb.size) return sb.size - sa.size;\n  if (a.Cluster !== b.Cluster) return a.Cluster < b.Cluster ? -1 : 1;\n  const ia = INTENT_ORDER[a.Intent] === undefined ? 5 : INTENT_ORDER[a.Intent];\n  const ib = INTENT_ORDER[b.Intent] === undefined ? 5 : INTENT_ORDER[b.Intent];\n  if (ia !== ib) return ia - ib;\n  return a.Keyword < b.Keyword ? -1 : 1;\n});\n\nreturn rows.map((r) => ({ json: r, pairedItem: { item: 0 } }));\n"
+      },
+      "id": "rows",
+      "name": "Build Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "fileName": "keyword-intent-clusters.xlsx",
+          "sheetName": "Keywords"
+        }
+      },
+      "id": "xlsx",
+      "name": "Build Spreadsheet",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "=✅ {{ $('Collect Classifications').first().json.totalKeywords }} keywords across {{ $('Collect Classifications').first().json.rawLabelCount }} raw topics, clustered and prioritised.",
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "sendFile",
+      "name": "Send Spreadsheet",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1900,
+        340
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---------------------------------------------------------------------------\n// Rebuilds a Telegram readable overview from the finished rows, so the sender\n// gets the headline findings without opening the spreadsheet.\n// ---------------------------------------------------------------------------\n\nconst rows = $('Build Rows').all().map((i) => i.json);\nconst collected = $('Collect Classifications').first().json;\n\nfunction esc(v) {\n  return String(v === undefined || v === null ? '' : v)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\nconst ICON = { transactional: '\\u{1F4B0}', commercial: '\\u{1F50E}', informational: '\\u{1F4D8}', navigational: '\\u{1F9ED}', unclassified: '\\u2753' };\nconst PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };\n\nconst intentCounts = {};\nconst priorityCounts = {};\nconst clusters = {};\nlet localCount = 0;\nlet brandedCount = 0;\n\nfor (const r of rows) {\n  intentCounts[r.Intent] = (intentCounts[r.Intent] || 0) + 1;\n  if (r.Priority) priorityCounts[r.Priority] = (priorityCounts[r.Priority] || 0) + 1;\n  if (r.Local === 'yes') localCount++;\n  if (r.Branded === 'yes') brandedCount++;\n  const c = clusters[r.Cluster] || { size: 0, best: 9, pillar: r['Pillar Page'], intents: {} };\n  c.size += 1;\n  const p = PRIORITY_ORDER[r.Priority];\n  c.best = Math.min(c.best, p === undefined ? 3 : p);\n  c.intents[r.Intent] = (c.intents[r.Intent] || 0) + 1;\n  if (!c.pillar && r['Pillar Page']) c.pillar = r['Pillar Page'];\n  clusters[r.Cluster] = c;\n}\n\nconst ranked = Object.entries(clusters)\n  .filter((e) => e[0] !== 'unclassified')\n  .sort((a, b) => (a[1].best - b[1].best) || (b[1].size - a[1].size))\n  .slice(0, 8);\n\nconst lines = [];\nlines.push('<b>Keyword Intent Clusters</b>');\nlines.push('<i>' + esc(collected.fileName) + ' \\u00B7 ' + rows.length + ' keywords \\u00B7 ' +\n  Object.keys(clusters).length + ' clusters</i>');\nlines.push('');\n\nlines.push('<b>Intent mix</b>');\nfor (const key of ['transactional', 'commercial', 'informational', 'navigational', 'unclassified']) {\n  if (!intentCounts[key]) continue;\n  const pct = Math.round((intentCounts[key] / rows.length) * 100);\n  lines.push(ICON[key] + ' ' + esc(key) + ': ' + intentCounts[key] + ' (' + pct + '%)');\n}\nlines.push('');\n\nlines.push('<b>Start here</b>');\nranked.forEach((entry, i) => {\n  const name = entry[0];\n  const c = entry[1];\n  lines.push((i + 1) + '. <b>' + esc(name) + '</b> \\u00B7 ' + c.size + ' kw' +\n    (c.best === 0 ? ' \\u00B7 high priority' : ''));\n  if (c.pillar) lines.push('    <i>' + esc(c.pillar) + '</i>');\n});\nlines.push('');\n\nfunction plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }\n\nconst flags = [];\nif (priorityCounts.high) flags.push(plural(priorityCounts.high, 'high priority keyword', 'high priority keywords'));\nif (localCount) flags.push(plural(localCount, 'local intent keyword', 'local intent keywords'));\nif (brandedCount) flags.push(plural(brandedCount, 'branded keyword', 'branded keywords'));\nif (collected.skipped) flags.push(plural(collected.skipped, 'row skipped as a duplicate or blank', 'rows skipped as duplicates or blanks'));\nif (collected.capped) flags.push('list was capped at the configured maximum');\nif (collected.batchesReturned < collected.batchCount) {\n  const failed = collected.batchCount - collected.batchesReturned;\n  flags.push(plural(failed, 'batch failed', 'batches failed') + ', those keywords are marked unclassified');\n}\nif (flags.length) {\n  lines.push('<b>Worth knowing</b>');\n  for (const f of flags) lines.push('\\u2022 ' + esc(f));\n  lines.push('');\n}\n\nlines.push('<i>' + esc(collected.modelUsed) + ' \\u00B7 ' + collected.tokensUsed + ' tokens</i>');\n\nlet text = lines.join('\\n');\nif (text.length > 3800) text = text.slice(0, 3780) + '\\n<i>[trimmed]</i>';\n\nreturn [{ json: { chatId: collected.chatId, summary: text } }];\n"
+      },
+      "id": "summary",
+      "name": "Build Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2120,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.summary }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "sendSummary",
+      "name": "Send Cluster Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2340,
+        340
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Route Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Input": {
+      "main": [
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Keyword File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Unsupported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Keyword File": {
+      "main": [
+        [
+          {
+            "node": "Parse Keyword File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Keyword File": {
+      "main": [
+        [
+          {
+            "node": "Has Keywords?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Keywords?": {
+      "main": [
+        [
+          {
+            "node": "Send Progress",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Classify Intent (Pass 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Parse Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Intent (Pass 1)": {
+      "main": [
+        [
+          {
+            "node": "Collect Classifications",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Batch Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Classifications": {
+      "main": [
+        [
+          {
+            "node": "Consolidate Clusters (Pass 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidate Clusters (Pass 2)": {
+      "main": [
+        [
+          {
+            "node": "Build Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Rows": {
+      "main": [
+        [
+          {
+            "node": "Build Spreadsheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Spreadsheet": {
+      "main": [
+        [
+          {
+            "node": "Send Spreadsheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Spreadsheet": {
+      "main": [
+        [
+          {
+            "node": "Build Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Cluster Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "active": false,
+  "versionId": "",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
